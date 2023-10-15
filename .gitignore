@@ -1,3 +1,10 @@
+CHANGELOG.md
+.logs/
+.latch/
+.vscode/
+.git
 **/__pycache__
-.latch
-.logs
+.latch_report.tar.gz
+.DS_Store
+tests/
+wf/.ipynb_checkpoints/
