@@ -22,7 +22,6 @@ missing_tixel_neighbor = {}
 number_of_channels = None
 barcode_to_clusters = {}
 clusters_to_barcode = {}
-goodtixels_passedFilt = {}
   
 def average_duplicates(big_list: List[List[int]]) -> Dict[str, float]:
   """Combine row, col, diag reduction lists; if a barcode occurs in 
@@ -116,10 +115,7 @@ def multiple_degree(first_neighbors: List[int], degree: int, current: int) -> Li
 def neighbors_reductions(
     singlecell: pd.DataFrame,
     outliers: List[int],
-    degree: int,
-    global_mean: float,
-    axis_id: str,
-    impute_flag: bool,
+    degree: int
   ) -> pd.DataFrame:
   """ Return table with barcode|barcode_index|adjust where "adjust"
   is the new value to reduce outlier lanes to; table to be used to
@@ -151,16 +147,13 @@ def neighbors_reductions(
 
 def imputate_lanes(
     singlecell: pd.DataFrame,
-    updated_tixels: pd.DataFrame,
     degree: int
-  ) -> pd.DataFrame:
+  ):
   """ Takes original data and applies the new values for (bad) tixels, then 
   updates the nmissing lanes within the data
   """
   global missing_lanes
   global bad_elements
-  
-  final = {}
   
   bad_elements = []
   all_elem_ids = {'row': [], 'col': []}
@@ -177,9 +170,8 @@ def imputate_lanes(
   
   for i,j in all_elem_ids.items():
     if len(j) > 0:
-      neighbors_reductions(singlecell, j, degree, 0, i, True)
+      neighbors_reductions(singlecell, j, degree)
   
-  return final
     
 
 
@@ -189,27 +181,20 @@ def combine_tables(
     degree: int=1
   ) -> pd.DataFrame:
   global missing_lanes
-  global goodtixels_passedFilt
   
 
   if (len(missing_lanes.values()) != 0):
     imputation_singlecell = singlecell.copy()
-    barcode_passed = imputation_singlecell[['barcode', 'passed_filters']]
-    barcode_passed = barcode_passed.set_index('barcode')
-    goodtixels_passedFilt = barcode_passed.to_dict('index')
-    imputate_lanes(imputation_singlecell, {}, degree)
+    imputate_lanes(imputation_singlecell, degree)
 
-  return {}
 
 def update_fragments(
-    fragments: pd.DataFrame,
-    outlier_barcodes: Dict[str, float]
+    fragments: pd.DataFrame
   ) -> pd.DataFrame:
   """Remove missing tixels from fragments and add them back
   """
   global missing_tixel_neighbor
   global clusters_to_barcode
-  global goodtixels_passedFilt
   global barcode_to_clusters
   
   def max_cluster(list_clust: List[str]):
@@ -245,10 +230,7 @@ def update_fragments(
     tixels_in_cluster = []
     dict_data_clusters[i] = {}
     for cluster_barcode in j:
-      if cluster_barcode in outlier_barcodes.keys():
-        frag_count = outlier_barcodes[cluster_barcode]
-      else:
-        frag_count = goodtixels_passedFilt[cluster_barcode]['passed_filters']
+      frag_count = remove_missing_barcodes[remove_missing_barcodes['barcode'] == cluster_barcode].shape[0]
       tixels_in_cluster.append(frag_count)
     try:
         dict_data_clusters[i]['avg_per_txl'] = math.ceil(statistics.mean(tixels_in_cluster))
@@ -282,8 +264,7 @@ def update_fragments(
   return final_frags
 
 def clean_fragments(
-    fragments_path: str,
-    r_table: Dict[str, float]
+    fragments_path: str
   ) -> pd.DataFrame:
   """Reduce high tixels by randomly downsampling fragments.tsv
   according to reduction table.
@@ -300,9 +281,8 @@ def clean_fragments(
   )
   fragments.columns = ['V1', 'V2', 'V3', 'barcode', 'V4']
   metrics_output['og'] = fragments.shape[0]
-  frag_copy = fragments.copy()
-  outlier_barcodes = list(r_table.keys())
   # Add missing lanes if needed
+  
   def add_clusters (v):
     all_barcode = v['barcode'].values
     all_clusters = [barcode_to_clusters[i] for i in all_barcode]
@@ -310,37 +290,29 @@ def clean_fragments(
   
   logging.info("Splitting fragments.tsv")
   if (len(missing_lanes.values()) != 0):
-    frag_copy_missing = fragments.copy()
+    frag_cluster = fragments.assign(clusters = lambda x: add_clusters(x))
     fragments = None
-    frag_cluster = frag_copy_missing.assign(clusters = lambda x: add_clusters(x))
-    fragments = update_fragments(frag_cluster, r_table)
+    fragments = update_fragments(frag_cluster)
     
   return fragments
 
 if __name__ == '__main__':
-  from glob import glob
-    
-  missins = {
-      "D01270" : ([], [9, 33]), # (rows, columns)
-      "D01355" : ([36], []) # (rows, columns)
-  }
-    
+        
   metrics_output = {}
-  run_id = "D01270"
+  run_id = sys.argv[1]
   metrics_output['run_id'] = run_id
-  singlecell_path = glob(f"tests/{run_id}/*_singlecell.csv")[0]
-  position_path = glob(f"tests/{run_id}/jnfoen.csv")[0]
-  fragments_path = glob(f"tests/{run_id}/*_fragments.tsv.gz")[0]
-  deviations = int(1)
-  missing_rows = missins[run_id][0]
-  missing_cols = missins[run_id][1]
+  position_path = sys.argv[2]
+  fragments_path = sys.argv[3]
+  deviations = int(sys.argv[4])
+  missing_rows = sys.argv[5].split(",")
+  missing_cols = sys.argv[6].split(",")
   missing_lanes['row'] = missing_rows
   missing_lanes['col'] = missing_cols
   degree = 1
 
-  singlecell = filter_sc(singlecell_path, position_path)
-  reduct_dict = combine_tables(singlecell, deviations, degree)
-  cleaned = clean_fragments(fragments_path, reduct_dict)
+  singlecell = filter_sc(position_path)
+  combine_tables(singlecell, deviations, degree)
+  cleaned = clean_fragments(fragments_path)
 
   cleaned.to_csv(
     f'{run_id}_fragments.tsv',
@@ -363,18 +335,3 @@ if __name__ == '__main__':
     writer = csv.writer(csvfile)
     writer.writerow(fields)
     writer.writerow(list(metrics_output.values()))
-
-  out_table = f"{run_id}_fragments.tsv"
-  _sort_cmd = [
-    "sort",
-    "-k1,1V",
-    "-k2,2n",
-    out_table
-  ]
-  subprocess.run(_sort_cmd, stdout=open(f"cleaned_{out_table}", "w"))
-
-  _zip_cmd = [
-    "bgzip",
-    f"cleaned_{out_table}" 
-  ]
-  subprocess.run(_zip_cmd)
