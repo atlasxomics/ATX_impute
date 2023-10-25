@@ -55,7 +55,6 @@ def filter_sc(position_path: str) -> pd.DataFrame:
   positions = pd.read_csv(position_path, header=None, usecols=[0,1,2,3,4])
   positions.columns = ['barcode', 'on_off', 'row', 'col', 'clusters']
   number_of_channels = math.sqrt(positions.shape[0])
-  positions['barcode'] = positions.loc[:,'barcode'].apply(lambda x: x + "-1")
   split_frame = positions[['barcode', 'on_off', 'clusters']]
   split_dict = split_frame.to_dict('split')['data']
   barcode_to_clusters = { bar:clu for (bar, on_off, clu) in split_dict}
