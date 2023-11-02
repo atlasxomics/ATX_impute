@@ -53,6 +53,7 @@ def impute_task(
     cluster_positions.to_csv('tissue_positions_list_clusters.csv', index=False)
 
     _impute_cmd = [
+        "python"
         "wf/impute.py",
         run_id,
         ",".join([str(i) for i in missing_rows]) if missing_rows else "",
