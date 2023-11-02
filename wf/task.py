@@ -56,8 +56,8 @@ def impute_task(
     _impute_cmd = [
         "wf/impute.py",
         run_id,
-        missing_rows,
-        missing_columns,
+        ",".join(missing_rows),
+        ",".join(missing_columns),
         fragments_file.local_path,
         'tissue_positions_list_clusters.csv'
     ]
