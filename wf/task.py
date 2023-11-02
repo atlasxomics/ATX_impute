@@ -6,22 +6,23 @@ from latch.types.file import LatchFile
 
 import csv
 import logging
+import pandas as pd
 import subprocess
 
-from typing import List
+from typing import List, Optional
 
 logging.basicConfig(
     format="%(levelname)s - %(asctime)s - %(message)s",
     level=logging.INFO
 )
 
+
 @medium_task
 def impute_task(
     run_id: str,
-    missing_rows: List[int],
-    missing_columns: List[int],
+    missing_rows: Optional[List[int]],
+    missing_columns: Optional[List[int]],
     fragments_file: LatchFile,
-    singlecell_file: LatchFile,
     positions_file: LatchFile,
     archrproject: LatchDir,
     output_directory: str
@@ -29,13 +30,31 @@ def impute_task(
 
     _r_cmd = [
         "Rscript",
-        "archr.R",
+        "wf/archr.R",
         run_id,
         positions_file.local_path,
         archrproject.local_path
     ]
     subprocess.run(_r_cmd)
-    
+
+    bc_clusters = pd.read_csv("barcode_clusters.csv", header=None, skiprows=1)
+    bc_clusters.columns = ['barcode', 'clusters']
+
+    positions = pd.read_csv(
+        positions_file.local_path,
+        header=None,
+        usecols=[0, 1, 2, 3]
+    )
+    positions.columns = ['barcode', 'on_off', 'row', 'col']
+
+    cluster_positions = pd.merge(
+        bc_clusters,
+        positions,
+        how='outer',
+        on='barcode'
+    )
+    cluster_positions.to_csv('tissue_positions_list_clusters.csv')
+
     metrics_output = {}
     metrics_output["run_id"] = run_id
 
@@ -44,10 +63,8 @@ def impute_task(
     missing_lanes["col"] = missing_columns
     degree = 1
 
-    singlecell = filter_sc(
-        singlecell_file.local_path, positions_file.local_path
-        )
-    reduct_dict = combine_tables(singlecell, deviations, degree)
+    clusters = filter_sc('tissue_positions_list_clusters.csv')
+    reduct_dict = combine_tables(clusters, deviations, degree)
     imputed = clean_fragments(fragments_file.local_path, reduct_dict)
 
     # sort and zip output
@@ -81,7 +98,6 @@ def impute_task(
     subprocess.run(
         ["mv", f"imputed_{out_table}.tsv.gz", summary_csv, output_directory]
     )
-
 
     return LatchDir(
         f"/root/{output_directory}", f"latch:///impute/{output_directory}"
