@@ -2,7 +2,6 @@ from latch.resources.tasks import medium_task
 from latch.types.directory import LatchDir
 from latch.types.file import LatchFile
 
-import csv
 import logging
 import pandas as pd
 import subprocess
@@ -56,8 +55,8 @@ def impute_task(
     _impute_cmd = [
         "wf/impute.py",
         run_id,
-        ",".join(missing_rows),
-        ",".join(missing_columns),
+        ",".join([str(i) for i in missing_rows]) if missing_rows else "",
+        ",".join([str(i) for i in missing_columns]) if missing_columns else "",
         fragments_file.local_path,
         'tissue_positions_list_clusters.csv'
     ]
