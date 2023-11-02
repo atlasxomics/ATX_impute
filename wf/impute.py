@@ -53,13 +53,13 @@ def filter_sc(position_path: str) -> pd.DataFrame:
     global number_of_channels
     global barcode_to_clusters
 
-    positions = pd.read_csv(position_path, header=None, usecols=[0, 1, 2, 3, 4])
-    positions.columns = ['barcode', 'on_off', 'row', 'col', 'clusters']
+    positions = pd.read_csv(
+        position_path, header=0, usecols=[0, 1, 2, 3, 4]
+    )
     number_of_channels = math.sqrt(positions.shape[0])
-    positions['barcode'] = positions.loc[:, 'barcode'].apply(lambda x: x + "-1")
     split_frame = positions[['barcode', 'on_off', 'clusters']]
     split_dict = split_frame.to_dict('split')['data']
-    barcode_to_clusters = {bar: clu for (bar, on_off, clu) in split_dict}
+    barcode_to_clusters = {bar: clu for (bar, _, clu) in split_dict}
     for i, x, j in split_dict:
         if x == 1:
             if j not in clusters_to_barcode.keys():
@@ -186,7 +186,6 @@ def imputate_lanes(
 
 def combine_tables(
     singlecell: pd.DataFrame,
-    deviations: int = 1,
     degree: int = 1
   ) -> pd.DataFrame:
     global missing_lanes
@@ -313,17 +312,19 @@ if __name__ == '__main__':
     metrics_output = {}
     run_id = sys.argv[1]
     metrics_output['run_id'] = run_id
-    position_path = sys.argv[2]
-    fragments_path = sys.argv[3]
-    deviations = int(sys.argv[4])
-    missing_rows = sys.argv[5].split(",")
-    missing_cols = sys.argv[6].split(",")
+
+    missing_rows = sys.argv[2].split(",")
+    missing_cols = sys.argv[3].split(",")
     missing_lanes['row'] = missing_rows
     missing_lanes['col'] = missing_cols
+
+    fragments_path = sys.argv[4]
+    position_path = sys.argv[5]
+
     degree = 1
 
     singlecell = filter_sc(position_path)
-    combine_tables(singlecell, deviations, degree)
+    combine_tables(singlecell, degree)
     cleaned = clean_fragments(fragments_path)
 
     cleaned.to_csv(

@@ -10,3 +10,4 @@ Dockerfile
 !.latch/snakemake_jit_entrypoint.py
 
 wf/add_cluster_info.py
+tests

@@ -1,5 +1,3 @@
-from wf.impute import *
-
 from latch.resources.tasks import medium_task
 from latch.types.directory import LatchDir
 from latch.types.file import LatchFile
@@ -53,52 +51,86 @@ def impute_task(
         how='outer',
         on='barcode'
     )
-    cluster_positions.to_csv('tissue_positions_list_clusters.csv')
+    cluster_positions.to_csv('tissue_positions_list_clusters.csv', index=False)
 
-    metrics_output = {}
-    metrics_output["run_id"] = run_id
-
-    deviations = int(1)
-    missing_lanes["row"] = missing_rows
-    missing_lanes["col"] = missing_columns
-    degree = 1
-
-    clusters = filter_sc('tissue_positions_list_clusters.csv')
-    reduct_dict = combine_tables(clusters, deviations, degree)
-    imputed = clean_fragments(fragments_file.local_path, reduct_dict)
-
-    # sort and zip output
-    out_table = f"{run_id}_fragments.tsv"
-    imputed.to_csv(out_table, sep='\t', index=False, header=False)
-
-    _sort_cmd = ["sort", "-k1,1V", "-k2,2n", out_table]
-    subprocess.run(_sort_cmd, stdout=open(f"imputed_{out_table}", "w"))
-
-    _zip_cmd = ["bgzip", f"imputed_{out_table}"]
-    subprocess.run(_zip_cmd)
-
-    # make summary csv
-    fields = [
-        'Run_Id',
-        'Columns imputed',
-        'Rows imputed',
-        'Original fragments',
-        'Final fragments',
-        'pct_diff'
+    _impute_cmd = [
+        "wf/impute.py",
+        run_id,
+        missing_rows,
+        missing_columns,
+        fragments_file.local_path,
+        'tissue_positions_list_clusters.csv'
     ]
 
-    summary_csv = f'{run_id}_impute_metrics.csv'
-    with open(summary_csv, 'w') as csvfile:
-        writer = csv.writer(csvfile)
-        writer.writerow(fields)
-        writer.writerow(list(metrics_output.values()))
+    subprocess.run(_impute_cmd)
+
+    # clusters = filter_sc('tissue_positions_list_clusters.csv')
+    # reduct_dict = combine_tables(clusters)
+    # imputed = clean_fragments(fragments_file.local_path, reduct_dict)
+
+    # # sort and zip output
+    # out_table = f"{run_id}_fragments.tsv"
+    # imputed.to_csv(out_table, sep='\t', index=False, header=False)
+
+    # _sort_cmd = ["sort", "-k1,1V", "-k2,2n", out_table]
+    # subprocess.run(_sort_cmd, stdout=open(f"imputed_{out_table}", "w"))
+
+    # _zip_cmd = ["bgzip", f"imputed_{out_table}"]
+    # subprocess.run(_zip_cmd)
+
+    # # make summary csv
+    # fields = [
+    #     'Run_Id',
+    #     'Columns imputed',
+    #     'Rows imputed',
+    #     'Original fragments',
+    #     'Final fragments',
+    #     'pct_diff'
+    # ]
+
+    # summary_csv = f'{run_id}_impute_metrics.csv'
+    # with open(summary_csv, 'w') as csvfile:
+    #     writer = csv.writer(csvfile)
+    #     writer.writerow(fields)
+    #     writer.writerow(list(metrics_output.values()))
 
     # Move outputs to output directory
+    metrics = f'{run_id}_cleaning_metrics.csv'
+    out_table = f"{run_id}_fragments.tsv"
+
+    _sort_cmd = [
+        "sort",
+        "-k1,1V",
+        "-k2,2n",
+        out_table
+    ]
+    subprocess.run(_sort_cmd, stdout=open(f"imputed_{out_table}", "w"))
+
+    _zip_cmd = [
+        "bgzip",
+        f"imputed_{out_table}"
+    ]
+    subprocess.run(_zip_cmd)
+
     subprocess.run(["mkdir", output_directory])
     subprocess.run(
-        ["mv", f"imputed_{out_table}.tsv.gz", summary_csv, output_directory]
+        ["mv", f"imputed_{out_table}.tsv.gz", metrics, output_directory]
     )
 
     return LatchDir(
         f"/root/{output_directory}", f"latch:///impute/{output_directory}"
     )
+
+
+if __name__ == "__main__":
+    print("blah")
+#     impute_task(
+#     run_id="D01279",
+#     missing_rows=[],:w
+
+#     missing_columns=[],
+#     fragments_file="",
+#     positions_file="",
+#     archrproject="",
+#     output_directory=""
+# )
