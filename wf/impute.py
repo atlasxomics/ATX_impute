@@ -57,6 +57,8 @@ def filter_sc(position_path: str) -> pd.DataFrame:
         position_path, header=0, usecols=[0, 1, 2, 3, 4]
     )
     number_of_channels = math.sqrt(positions.shape[0])
+    positions['barcode'] = (positions.loc[:, 'barcode']
+                            .apply(lambda x: x + "-1"))
     split_frame = positions[['barcode', 'on_off', 'clusters']]
     split_dict = split_frame.to_dict('split')['data']
     barcode_to_clusters = {bar: clu for (bar, _, clu) in split_dict}
@@ -92,16 +94,24 @@ def get_neighbors(current_value: int, repeat: List[int]) -> List[int]:
     if row - 1 >= 0 and [row - 1, col] not in bad_elements:
         all_neighbors['u'] = [row - 1, col]
     # leftUp
-    if row - 1 >= 0 and col - 1 >= 0 and [row - 1, col - 1] not in bad_elements:
+    if (row - 1 >= 0 and
+            col - 1 >= 0 and
+            [row - 1, col - 1] not in bad_elements):
         all_neighbors['lu'] = [row - 1, col - 1]
     # leftDown
-    if row + 1 < number_of_channels and col - 1 >= 0 and [row + 1, col - 1] not in bad_elements:
+    if (row + 1 < number_of_channels
+            and col - 1 >= 0 and
+            [row + 1, col - 1] not in bad_elements):
         all_neighbors['ld'] = [row + 1, col - 1]
     # rightUp
-    if row - 1 >= 0 and col + 1 < number_of_channels and [row - 1, col + 1] not in bad_elements:
+    if (row - 1 >= 0 and
+            col + 1 < number_of_channels and
+            [row - 1, col + 1] not in bad_elements):
         all_neighbors['ru'] = [row - 1, col + 1]
     # rightDown
-    if row + 1 < number_of_channels and col + 1 < number_of_channels and [row + 1, col + 1] not in bad_elements:
+    if (row + 1 < number_of_channels and
+            col + 1 < number_of_channels and
+            [row + 1, col + 1] not in bad_elements):
         all_neighbors['rd'] = [row + 1, col + 1]
 
     return all_neighbors
@@ -142,17 +152,21 @@ def neighbors_reductions(
         col = current_tixel['col']
         barcode = current_tixel['barcode']
         neighbors = get_neighbors([row, col], [])
-        # if degree > 1: neighbors += multiple_degree(neighbors, degree, i)      
+        # if degree > 1: neighbors += multiple_degree(neighbors, degree, i)
         for pos, j in neighbors.items():
             try:
-                current_neighbor = singlecell.loc[(singlecell['row'] == j[0]) & (singlecell['col'] == j[1])]
+                current_neighbor = (
+                    singlecell.loc[
+                        (singlecell['row'] == j[0])
+                        & (singlecell['col'] == j[1])
+                    ]
+                )
                 current_barode = current_neighbor['barcode'].values[0]
                 if barcode not in missing_tixel_neighbor.keys():
                     missing_tixel_neighbor[barcode] = {}
                     missing_tixel_neighbor[barcode][current_barode] = pos
                 else:
                     missing_tixel_neighbor[barcode][current_barode] = pos
-
             except Exception as e:
                 pass
 
@@ -231,7 +245,9 @@ def update_fragments(
         return final_clust
 
     missing_barcodes = list(missing_tixel_neighbor.keys())
-    remove_missing_barcodes = fragments[fragments['barcode'].isin(missing_barcodes) == False]
+    remove_missing_barcodes = fragments[
+        fragments['barcode'].isin(missing_barcodes) == False
+    ]
     final_frags = remove_missing_barcodes.copy()
 
     dict_data_clusters = {}
@@ -239,14 +255,24 @@ def update_fragments(
         tixels_in_cluster = []
         dict_data_clusters[i] = {}
         for cluster_barcode in j:
-            frag_count = remove_missing_barcodes[remove_missing_barcodes['barcode'] == cluster_barcode].shape[0]
+            frag_count = remove_missing_barcodes[
+                remove_missing_barcodes['barcode'] == cluster_barcode
+            ].shape[0]
             tixels_in_cluster.append(frag_count)
         try:
-            dict_data_clusters[i]['avg_per_txl'] = math.ceil(statistics.mean(tixels_in_cluster))
-            dict_data_clusters[i]['std'] = math.ceil(statistics.stdev(tixels_in_cluster))
+            dict_data_clusters[i]['avg_per_txl'] = math.ceil(
+                statistics.mean(tixels_in_cluster)
+            )
+            dict_data_clusters[i]['std'] = math.ceil(
+                statistics.stdev(tixels_in_cluster)
+            )
         except:
-            dict_data_clusters[i]['avg_per_txl'] = math.ceil(statistics.mean(tixels_in_cluster))
-            dict_data_clusters[i]['std'] = math.ceil(statistics.mean(tixels_in_cluster) * .5)
+            dict_data_clusters[i]['avg_per_txl'] = math.ceil(
+                statistics.mean(tixels_in_cluster)
+            )
+            dict_data_clusters[i]['std'] = math.ceil(
+                statistics.mean(tixels_in_cluster) * .5
+            )
 
         count = 0
         pre = pd.DataFrame()
@@ -254,23 +280,36 @@ def update_fragments(
             count += 1
             print(count, pre.shape[0])
             define_cluster = []
+
         for barcode, direction in j.items():
             current_cluster = barcode_to_clusters[barcode]
             define_cluster.append(current_cluster)
+
         assigned_cluster = max_cluster(define_cluster)
         rand_plus_minu = random.choice([-1, 1])
         clust_avg = dict_data_clusters[assigned_cluster]['avg_per_txl']
         clust_std = dict_data_clusters[assigned_cluster]['std']
         rand_std = random.randint(1, clust_std)
         given_frags = rand_std * rand_plus_minu + clust_avg
-        current_cluster_frags = final_frags[final_frags['clusters'] == assigned_cluster]
-        current_cluster_frags["barcode"] = [m_tixel for i in range(current_cluster_frags.shape[0])]
+        current_cluster_frags = final_frags[
+            final_frags['clusters'] == assigned_cluster
+        ]
+        current_cluster_frags["barcode"] = [
+            m_tixel for i in range(current_cluster_frags.shape[0])
+        ]
         downsampled = current_cluster_frags.sample(n=given_frags)
         pre = pd.concat([pre, downsampled])
 
         final_frags = pd.concat([final_frags, pre])
         final_frags = final_frags.drop('clusters', axis=1)
+
         return final_frags
+
+
+def add_clusters(v):
+    all_barcode = v['barcode'].values
+    all_clusters = [barcode_to_clusters[i] for i in all_barcode]
+    return all_clusters
 
 
 def clean_fragments(
@@ -293,17 +332,11 @@ def clean_fragments(
     metrics_output['og'] = fragments.shape[0]
     # Add missing lanes if needed
 
-    def add_clusters(v):
-        all_barcode = v['barcode'].values
-        all_clusters = [barcode_to_clusters[i] for i in all_barcode]
-        return all_clusters
-
     logging.info("Splitting fragments.tsv")
     if (len(missing_lanes.values()) != 0):
         frag_cluster = fragments.assign(clusters=lambda x: add_clusters(x))
         fragments = None
         fragments = update_fragments(frag_cluster)
-
     return fragments
 
 
@@ -343,6 +376,7 @@ if __name__ == '__main__':
         'Final fragments',
         'pct_diff'
     ]
+    logging.info("Writing metrics")
     filename = f'{run_id}_cleaning_metrics.csv'
     with open(filename, 'w') as csvfile:
         writer = csv.writer(csvfile)

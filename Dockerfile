@@ -33,7 +33,8 @@ RUN apt-get update -y && \
         make \
         pandoc \
         tzdata \
-        zlib1g-dev        
+        zlib1g-dev \
+        tabix 
 
 # Install devtools, cairo like this; see https://stackoverflow.com/questions/20923209
 RUN apt-get install -y r-cran-devtools libcairo2-dev

@@ -53,7 +53,7 @@ def impute_task(
     cluster_positions.to_csv('tissue_positions_list_clusters.csv', index=False)
 
     _impute_cmd = [
-        "python"
+        "python",
         "wf/impute.py",
         run_id,
         ",".join([str(i) for i in missing_rows]) if missing_rows else "",
@@ -63,36 +63,6 @@ def impute_task(
     ]
 
     subprocess.run(_impute_cmd)
-
-    # clusters = filter_sc('tissue_positions_list_clusters.csv')
-    # reduct_dict = combine_tables(clusters)
-    # imputed = clean_fragments(fragments_file.local_path, reduct_dict)
-
-    # # sort and zip output
-    # out_table = f"{run_id}_fragments.tsv"
-    # imputed.to_csv(out_table, sep='\t', index=False, header=False)
-
-    # _sort_cmd = ["sort", "-k1,1V", "-k2,2n", out_table]
-    # subprocess.run(_sort_cmd, stdout=open(f"imputed_{out_table}", "w"))
-
-    # _zip_cmd = ["bgzip", f"imputed_{out_table}"]
-    # subprocess.run(_zip_cmd)
-
-    # # make summary csv
-    # fields = [
-    #     'Run_Id',
-    #     'Columns imputed',
-    #     'Rows imputed',
-    #     'Original fragments',
-    #     'Final fragments',
-    #     'pct_diff'
-    # ]
-
-    # summary_csv = f'{run_id}_impute_metrics.csv'
-    # with open(summary_csv, 'w') as csvfile:
-    #     writer = csv.writer(csvfile)
-    #     writer.writerow(fields)
-    #     writer.writerow(list(metrics_output.values()))
 
     # Move outputs to output directory
     metrics = f'{run_id}_cleaning_metrics.csv'
@@ -110,11 +80,12 @@ def impute_task(
         "bgzip",
         f"imputed_{out_table}"
     ]
+    logging.info("Zipping fragments.tsv")
     subprocess.run(_zip_cmd)
 
     subprocess.run(["mkdir", output_directory])
     subprocess.run(
-        ["mv", f"imputed_{out_table}.tsv.gz", metrics, output_directory]
+        ["mv", f"imputed_{out_table}.gz", metrics, output_directory]
     )
 
     return LatchDir(
@@ -123,14 +94,13 @@ def impute_task(
 
 
 if __name__ == "__main__":
-    print("blah")
-#     impute_task(
-#     run_id="D01279",
-#     missing_rows=[],:w
 
-#     missing_columns=[],
-#     fragments_file="",
-#     positions_file="",
-#     archrproject="",
-#     output_directory=""
-# )
+    impute_task(
+        run_id="D01279",
+        missing_rows=[1],
+        missing_columns=[10, 34],
+        fragments_file="latch://13502.account/atac_outs/D01270_NG02546/outs/D01270_NG02546_fragments.tsv.gz",
+        positions_file="latch://13502.account/spatials/x50_all_tissue_positions_list.csv",
+        archrproject="latch://13502.account/ArchRProjects/D01270/D01270_ArchRProject",
+        output_directory="dev_test"
+    )

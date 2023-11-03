@@ -17,4 +17,3 @@ df <- data.frame(barcodes = rownames(df), df, row.names = NULL)
 df$barcodes <- sub(".*#(.*?)-.*", "\\1", df$barcodes)
 
 write.csv(df, "barcode_clusters.csv", row.names = FALSE)
-head(df)
