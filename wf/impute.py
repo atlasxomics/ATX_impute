@@ -21,37 +21,13 @@ missing_tixel_neighbor = {}
 number_of_channels = None
 barcode_to_clusters = {}
 clusters_to_barcode = {}
-
-
-def average_duplicates(big_list: List[List[int]]) -> Dict[str, float]:
-    """Combine row, col, diag reduction lists; if a barcode occurs in
-    more then one list, returns the average.
-    """
-
-    barcodes_match = {}
-    final = {}
-    holder = []
-    for i in big_list:
-        holder.extend(i)
-        for x in holder:
-            if x[0] not in barcodes_match.keys():
-                barcodes_match[x[0]] = [x[1]]
-        else:
-            if x[1] not in barcodes_match[x[0]]:
-                barcodes_match[x[0]].append(x[1])
-    for i, j in barcodes_match.items():
-        mean = statistics.mean(j)
-        final[i] = mean
-
-    return final
-
-
 def filter_sc(position_path: str) -> pd.DataFrame:
     """ Reformat data, remove headers, apply custom column names for
     dataframes, add -1 to positions, remove off tixels.
     """
     global number_of_channels
     global barcode_to_clusters
+    global clusters_to_barcode
 
     positions = pd.read_csv(
         position_path, header=0, usecols=[0, 1, 2, 3, 4]
@@ -59,6 +35,9 @@ def filter_sc(position_path: str) -> pd.DataFrame:
     number_of_channels = math.sqrt(positions.shape[0])
     positions['barcode'] = (positions.loc[:, 'barcode']
                             .apply(lambda x: x + "-1"))
+    positions['on_off'] = pd.to_numeric(positions['on_off'])
+    positions['row'] = pd.to_numeric(positions['row'])
+    positions['col'] = pd.to_numeric(positions['col'])
     split_frame = positions[['barcode', 'on_off', 'clusters']]
     split_dict = split_frame.to_dict('split')['data']
     barcode_to_clusters = {bar: clu for (bar, _, clu) in split_dict}
@@ -151,6 +130,8 @@ def neighbors_reductions(
         row = current_tixel['row']
         col = current_tixel['col']
         barcode = current_tixel['barcode']
+        if barcode not in missing_tixel_neighbor.keys():
+            missing_tixel_neighbor[barcode] = {}
         neighbors = get_neighbors([row, col], [])
         # if degree > 1: neighbors += multiple_degree(neighbors, degree, i)
         for pos, j in neighbors.items():
@@ -161,12 +142,8 @@ def neighbors_reductions(
                         & (singlecell['col'] == j[1])
                     ]
                 )
-                current_barode = current_neighbor['barcode'].values[0]
-                if barcode not in missing_tixel_neighbor.keys():
-                    missing_tixel_neighbor[barcode] = {}
-                    missing_tixel_neighbor[barcode][current_barode] = pos
-                else:
-                    missing_tixel_neighbor[barcode][current_barode] = pos
+                current_barcode = current_neighbor['barcode'].values[0]
+                missing_tixel_neighbor[barcode][current_barcode] = pos
             except Exception as e:
                 pass
 
@@ -204,7 +181,7 @@ def combine_tables(
   ) -> pd.DataFrame:
     global missing_lanes
 
-    if (len(missing_lanes.values()) != 0):
+    if len(missing_lanes['row'] + missing_lanes['col']) > 0:
         imputation_singlecell = singlecell.copy()
         imputate_lanes(imputation_singlecell, degree)
 
@@ -274,36 +251,39 @@ def update_fragments(
                 statistics.mean(tixels_in_cluster) * .5
             )
 
-        count = 0
-        pre = pd.DataFrame()
-        for m_tixel, j in missing_tixel_neighbor.items():
-            count += 1
-            print(count, pre.shape[0])
-            define_cluster = []
+    count = 0
+    pre = pd.DataFrame()
+    for m_tixel, j in missing_tixel_neighbor.items():
+        count += 1
+        print(count, pre.shape[0])
+        define_cluster = []
 
-        for barcode, direction in j.items():
-            current_cluster = barcode_to_clusters[barcode]
-            define_cluster.append(current_cluster)
+        if len(j.keys()) > 0:
+            for barcode, direction in j.items():
+                current_cluster = barcode_to_clusters[barcode]
+                define_cluster.append(current_cluster)
 
-        assigned_cluster = max_cluster(define_cluster)
-        rand_plus_minu = random.choice([-1, 1])
-        clust_avg = dict_data_clusters[assigned_cluster]['avg_per_txl']
-        clust_std = dict_data_clusters[assigned_cluster]['std']
-        rand_std = random.randint(1, clust_std)
-        given_frags = rand_std * rand_plus_minu + clust_avg
-        current_cluster_frags = final_frags[
-            final_frags['clusters'] == assigned_cluster
-        ]
-        current_cluster_frags["barcode"] = [
-            m_tixel for i in range(current_cluster_frags.shape[0])
-        ]
-        downsampled = current_cluster_frags.sample(n=given_frags)
-        pre = pd.concat([pre, downsampled])
+            assigned_cluster = max_cluster(define_cluster)
+            rand_plus_minu = random.choice([-1, 1])
+            clust_avg = dict_data_clusters[assigned_cluster]['avg_per_txl']
+            clust_std = dict_data_clusters[assigned_cluster]['std']
+            rand_std = random.randint(1, clust_std)
+            given_frags = rand_std * rand_plus_minu + clust_avg
+            current_cluster_frags = final_frags[
+                final_frags['clusters'] == assigned_cluster
+            ]
+            current_cluster_frags["barcode"] = [
+                m_tixel for i in range(current_cluster_frags.shape[0])
+            ]
+            if given_frags < 0: 
+                given_frags = 0
+            downsampled = current_cluster_frags.sample(n=given_frags)
+            pre = pd.concat([pre, downsampled])
 
-        final_frags = pd.concat([final_frags, pre])
-        final_frags = final_frags.drop('clusters', axis=1)
+    final_frags = pd.concat([final_frags, pre])
+    final_frags = final_frags.drop('clusters', axis=1)
 
-        return final_frags
+    return final_frags
 
 
 def add_clusters(v):
@@ -333,7 +313,7 @@ def clean_fragments(
     # Add missing lanes if needed
 
     logging.info("Splitting fragments.tsv")
-    if (len(missing_lanes.values()) != 0):
+    if (len(missing_lanes['row'] + missing_lanes['col']) > 0):
         frag_cluster = fragments.assign(clusters=lambda x: add_clusters(x))
         fragments = None
         fragments = update_fragments(frag_cluster)

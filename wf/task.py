@@ -5,6 +5,7 @@ from latch.types.file import LatchFile
 import logging
 import pandas as pd
 import subprocess
+import numpy as np
 
 from typing import List, Optional
 
@@ -45,11 +46,15 @@ def impute_task(
     positions.columns = ['barcode', 'on_off', 'row', 'col']
 
     cluster_positions = pd.merge(
-        bc_clusters,
         positions,
+        bc_clusters,
         how='outer',
         on='barcode'
     )
+    not_in_archR = np.where(pd.isnull(cluster_positions))
+    update = not_in_archR[0].tolist()
+    for i in update:
+        cluster_positions.iloc[i, 4] = "C0"
     cluster_positions.to_csv('tissue_positions_list_clusters.csv', index=False)
 
     _impute_cmd = [
