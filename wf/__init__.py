@@ -7,13 +7,14 @@ from latch.types.metadata import (
     LatchAuthor, LatchMetadata, LatchParameter, LatchRule
 )
 
-from typing import List
+from typing import List, Optional
+
 
 metadata = LatchMetadata(
     display_name="ATX impute",
     author=LatchAuthor(
         name="AtlasXomics Inc.",
-        email="jamesm@atlasxomics.com",
+        email="joshuab@atlasxomics.com",
         github="https://github.com/atlasxomics",
     ),
     repository="https://github.com/atlasxomics/ATX_impute",
@@ -48,14 +49,8 @@ metadata = LatchMetadata(
         ),
         "fragments_file": LatchParameter(
             display_name="fragments file",
-            description="fragments.tsv.gz file from an epigenomic preprocessing \
-                and alignment workflow.",
-            batch_table_column=True,
-        ),
-        "singlecell_file": LatchParameter(
-            display_name="singlecell file",
-            description="singlecell.csv file from an epigenomic preprocessing \
-                and alignment workflow.",
+            description="fragments.tsv.gz file from an epigenomic \
+                preprocessing and alignment workflow.",
             batch_table_column=True,
         ),
         "positions_file": LatchParameter(
@@ -68,7 +63,7 @@ metadata = LatchMetadata(
             description="",
             batch_table_column=True,
         ),
-       "output_directory": LatchParameter(
+        "output_directory": LatchParameter(
             display_name="output directory",
             batch_table_column=True,
             description="Name of Latch directory for merge fastq files; files \
@@ -81,7 +76,7 @@ metadata = LatchMetadata(
                 LatchRule(
                     regex="^\S+$",
                     message="directory name cannot contain whitespace"
-                )                
+                )
             ]
         ),
     },
@@ -91,21 +86,19 @@ metadata = LatchMetadata(
 @workflow(metadata)
 def impute_workflow(
     run_id: str,
-    missing_rows: List[int],
-    missing_columns: List[int],
+    missing_rows: Optional[List[int]],
+    missing_columns: Optional[List[int]],
     fragments_file: LatchFile,
-    singlecell_file: LatchFile,
     positions_file: LatchFile,
     archrproject: LatchDir,
     output_directory: str
 ) -> LatchDir:
-    
+
     return impute_task(
         run_id=run_id,
         missing_rows=missing_rows,
         missing_columns=missing_columns,
         fragments_file=fragments_file,
-        singlecell_file=singlecell_file,
         positions_file=positions_file,
         archrproject=archrproject,
         output_directory=output_directory
