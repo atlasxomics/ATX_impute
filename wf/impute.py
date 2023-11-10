@@ -7,7 +7,7 @@ import statistics
 import sys
 import random
 
-from typing import Dict, List
+from typing import List
 
 logging.basicConfig(
     format="%(levelname)s - %(asctime)s - %(message)s",
@@ -21,6 +21,8 @@ missing_tixel_neighbor = {}
 number_of_channels = None
 barcode_to_clusters = {}
 clusters_to_barcode = {}
+
+
 def filter_sc(position_path: str) -> pd.DataFrame:
     """ Reformat data, remove headers, apply custom column names for
     dataframes, add -1 to positions, remove off tixels.
@@ -268,7 +270,7 @@ def update_fragments(
             clust_avg = dict_data_clusters[assigned_cluster]['avg_per_txl']
             clust_std = dict_data_clusters[assigned_cluster]['std']
             if clust_std < 1:
-              clust_std = 1
+                clust_std = 1
             rand_std = random.randint(1, clust_std)
             given_frags = rand_std * rand_plus_minu + clust_avg
             current_cluster_frags = final_frags[
@@ -277,7 +279,7 @@ def update_fragments(
             current_cluster_frags["barcode"] = [
                 m_tixel for i in range(current_cluster_frags.shape[0])
             ]
-            if given_frags < 0: 
+            if given_frags < 0:
                 given_frags = 0
             downsampled = current_cluster_frags.sample(n=given_frags)
             pre = pd.concat([pre, downsampled])
@@ -312,14 +314,14 @@ def clean_fragments(
     )
     fragments.columns = ['V1', 'V2', 'V3', 'barcode', 'V4']
     metrics_output['og'] = fragments.shape[0]
-    
+
     # Add missing lanes if needed
     logging.info("Splitting fragments.tsv")
     if (len(missing_lanes['row'] + missing_lanes['col']) > 0):
         frag_cluster = fragments.assign(clusters=lambda x: add_clusters(x))
         fragments = None
         fragments = update_fragments(frag_cluster)
-        
+
     metrics_output['final'] = fragments.shape[0]
     metrics_output['pct'] = metrics_output['final'] / metrics_output['og']
     return fragments
