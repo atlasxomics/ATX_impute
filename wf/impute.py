@@ -312,13 +312,16 @@ def clean_fragments(
     )
     fragments.columns = ['V1', 'V2', 'V3', 'barcode', 'V4']
     metrics_output['og'] = fragments.shape[0]
+    
     # Add missing lanes if needed
-
     logging.info("Splitting fragments.tsv")
     if (len(missing_lanes['row'] + missing_lanes['col']) > 0):
         frag_cluster = fragments.assign(clusters=lambda x: add_clusters(x))
         fragments = None
         fragments = update_fragments(frag_cluster)
+        
+    metrics_output['final'] = fragments.shape[0]
+    metrics_output['pct'] = metrics_output['final'] / metrics_output['og']
     return fragments
 
 
@@ -333,6 +336,8 @@ if __name__ == '__main__':
     missing_lanes['row'] = [int(i) - 1 for i in missing_rows if i != '']
     missing_lanes['col'] = [int(i) - 1 for i in missing_cols if i != '']
 
+    metrics_output['col'] = ''.join(missing_cols)
+    metrics_output['row'] = ''.join(missing_rows)
     fragments_path = sys.argv[4]
     position_path = sys.argv[5]
 
@@ -351,9 +356,8 @@ if __name__ == '__main__':
 
     fields = [
         'Run_Id',
-        'Columns downsampled',
-        'Rows downsampled',
-        'Diagonal downsampled',
+        'Columns imputed',
+        'Rows imputed',
         'Original fragments',
         'Final fragments',
         'pct_diff'
