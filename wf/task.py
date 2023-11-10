@@ -1,4 +1,4 @@
-from latch.resources.tasks import medium_task
+from latch.resources.tasks import large_task
 from latch.types.directory import LatchDir
 from latch.types.file import LatchFile
 
@@ -15,7 +15,7 @@ logging.basicConfig(
 )
 
 
-@medium_task
+@large_task
 def impute_task(
     run_id: str,
     missing_rows: Optional[List[int]],
