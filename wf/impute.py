@@ -162,7 +162,7 @@ def imputate_lanes(
     all_elem_ids = {'row': [], 'col': []}
     for axis, lane in missing_lanes.items():
         for elem in lane:
-            outlier_ids = np.where(singlecell[axis] == int(elem))
+            outlier_ids = np.where(singlecell[axis] == elem)
             all_elem_ids[axis] += outlier_ids[0].tolist()
     for bad_id in all_elem_ids[axis]:
         element = singlecell.iloc[bad_id]
@@ -330,8 +330,8 @@ if __name__ == '__main__':
 
     missing_rows = sys.argv[2].split(",")
     missing_cols = sys.argv[3].split(",")
-    missing_lanes['row'] = [i for i in missing_rows if i != '']
-    missing_lanes['col'] = [i for i in missing_cols if i != '']
+    missing_lanes['row'] = [int(i) - 1 for i in missing_rows if i != '']
+    missing_lanes['col'] = [int(i) - 1 for i in missing_cols if i != '']
 
     fragments_path = sys.argv[4]
     position_path = sys.argv[5]
