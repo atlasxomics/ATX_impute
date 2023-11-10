@@ -267,6 +267,8 @@ def update_fragments(
             rand_plus_minu = random.choice([-1, 1])
             clust_avg = dict_data_clusters[assigned_cluster]['avg_per_txl']
             clust_std = dict_data_clusters[assigned_cluster]['std']
+            if clust_std < 1:
+              clust_std = 1
             rand_std = random.randint(1, clust_std)
             given_frags = rand_std * rand_plus_minu + clust_avg
             current_cluster_frags = final_frags[
@@ -328,8 +330,8 @@ if __name__ == '__main__':
 
     missing_rows = sys.argv[2].split(",")
     missing_cols = sys.argv[3].split(",")
-    missing_lanes['row'] = missing_rows
-    missing_lanes['col'] = missing_cols
+    missing_lanes['row'] = [i for i in missing_rows if i != '']
+    missing_lanes['col'] = [i for i in missing_cols if i != '']
 
     fragments_path = sys.argv[4]
     position_path = sys.argv[5]
