@@ -7,7 +7,7 @@ import statistics
 import sys
 import random
 
-from typing import List
+from typing import List, Dict
 
 logging.basicConfig(
     format="%(levelname)s - %(asctime)s - %(message)s",
@@ -189,7 +189,8 @@ def combine_tables(
 
 
 def update_fragments(
-    fragments: pd.DataFrame
+    fragments: pd.DataFrame,
+    stats_cluster: Dict[str, Dict[str, int]]
 ) -> pd.DataFrame:
     """Remove missing tixels from fragments and add them back
     """
@@ -223,35 +224,8 @@ def update_fragments(
 
         return final_clust
 
-    missing_barcodes = list(missing_tixel_neighbor.keys())
-    remove_missing_barcodes = fragments[
-        fragments['barcode'].isin(missing_barcodes) == False
-    ]
-    final_frags = remove_missing_barcodes.copy()
-
-    dict_data_clusters = {}
-    for i, j in clusters_to_barcode.items():
-        tixels_in_cluster = []
-        dict_data_clusters[i] = {}
-        for cluster_barcode in j:
-            frag_count = remove_missing_barcodes[
-                remove_missing_barcodes['barcode'] == cluster_barcode
-            ].shape[0]
-            tixels_in_cluster.append(frag_count)
-        try:
-            dict_data_clusters[i]['avg_per_txl'] = math.ceil(
-                statistics.mean(tixels_in_cluster)
-            )
-            dict_data_clusters[i]['std'] = math.ceil(
-                statistics.stdev(tixels_in_cluster)
-            )
-        except:
-            dict_data_clusters[i]['avg_per_txl'] = math.ceil(
-                statistics.mean(tixels_in_cluster)
-            )
-            dict_data_clusters[i]['std'] = math.ceil(
-                statistics.mean(tixels_in_cluster) * .5
-            )
+    final_frags = fragments.copy()
+    dict_data_clusters = stats_cluster
 
     count = 0
     pre = pd.DataFrame()
@@ -291,9 +265,41 @@ def update_fragments(
 
 
 def add_clusters(v):
+    all_clusters = []
+    tixels_in_cluster = {}
+    stats_for_clusters = {}    
     all_barcode = v['barcode'].values
-    all_clusters = [barcode_to_clusters[i] for i in all_barcode]
-    return all_clusters
+    for current_barcode in all_barcode:
+        current_cluster = barcode_to_clusters[current_barcode]
+        all_clusters.append(current_cluster)
+        try:
+            if current_cluster not in tixels_in_cluster.keys():
+                tixels_in_cluster[current_cluster] = {}
+                stats_for_clusters[current_cluster] = {}
+                
+            if current_barcode not in tixels_in_cluster[current_cluster].keys():
+                tixels_in_cluster[current_cluster][current_barcode] = 0
+            tixels_in_cluster[current_cluster][current_barcode] += 1
+        except:
+            pass
+    
+    for i,j in tixels_in_cluster.items():
+        try:
+            stats_for_clusters[i]['avg_per_txl'] = math.ceil(
+                    statistics.mean(list(j.values()))
+                )
+            stats_for_clusters[i]['std'] = math.ceil(
+                    statistics.stdev(list(j.values()))
+                )
+        except:
+            stats_for_clusters[i]['avg_per_txl'] = math.ceil(
+                    statistics.mean(list(j.values()))
+                )
+            stats_for_clusters[i]['std'] = math.ceil(
+                    statistics.mean(list(j.values())) * .5
+                )
+            
+    return all_clusters, stats_for_clusters
 
 
 def clean_fragments(
@@ -304,6 +310,8 @@ def clean_fragments(
     """
     global metrics_output
     global barcode_to_clusters
+    global missing_lanes
+    global missing_tixel_neighbor
 
     logging.info("Loading fragments.tsv")
     fragments = pd.read_csv(
@@ -318,9 +326,13 @@ def clean_fragments(
     # Add missing lanes if needed
     logging.info("Splitting fragments.tsv")
     if (len(missing_lanes['row'] + missing_lanes['col']) > 0):
-        frag_cluster = fragments.assign(clusters=lambda x: add_clusters(x))
-        fragments = None
-        fragments = update_fragments(frag_cluster)
+        missing_barcodes = list(missing_tixel_neighbor.keys())
+        remove_missing_barcodes = fragments[
+            fragments['barcode'].isin(missing_barcodes) == False
+        ]
+        frag_cluster, stats_cluster = add_clusters(remove_missing_barcodes)
+        fragments['clusters'] = frag_cluster
+        fragments = update_fragments(fragments, stats_cluster)
 
     metrics_output['final'] = fragments.shape[0]
     metrics_output['pct'] = metrics_output['final'] / metrics_output['og']
