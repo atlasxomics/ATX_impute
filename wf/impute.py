@@ -334,8 +334,8 @@ def clean_fragments(
             fragments['barcode'].isin(missing_barcodes) == False
         ]
         frag_cluster, stats_cluster = add_clusters(remove_missing_barcodes)
-        fragments['clusters'] = frag_cluster
-        fragments = update_fragments(fragments, stats_cluster)
+        remove_missing_barcodes['clusters'] = frag_cluster
+        fragments = update_fragments(remove_missing_barcodes, stats_cluster)
 
     metrics_output['final'] = fragments.shape[0]
     metrics_output['pct'] = metrics_output['final'] / metrics_output['og']
