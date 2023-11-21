@@ -147,6 +147,7 @@ def neighbors_reductions(
                 current_barcode = current_neighbor['barcode'].values[0]
                 missing_tixel_neighbor[barcode][current_barcode] = pos
             except Exception as e:
+                logging.warn(f"{e}")
                 pass
 
 
@@ -267,7 +268,7 @@ def update_fragments(
 def add_clusters(v):
     all_clusters = []
     tixels_in_cluster = {}
-    stats_for_clusters = {}    
+    stats_for_clusters = {}
     all_barcode = v['barcode'].values
     for current_barcode in all_barcode:
         current_cluster = barcode_to_clusters[current_barcode]
@@ -276,14 +277,15 @@ def add_clusters(v):
             if current_cluster not in tixels_in_cluster.keys():
                 tixels_in_cluster[current_cluster] = {}
                 stats_for_clusters[current_cluster] = {}
-                
+
             if current_barcode not in tixels_in_cluster[current_cluster].keys():
                 tixels_in_cluster[current_cluster][current_barcode] = 0
             tixels_in_cluster[current_cluster][current_barcode] += 1
-        except:
+        except Exception as e:
+            logging.warn(f"{e}")
             pass
-    
-    for i,j in tixels_in_cluster.items():
+
+    for i, j in tixels_in_cluster.items():
         try:
             stats_for_clusters[i]['avg_per_txl'] = math.ceil(
                     statistics.mean(list(j.values()))
@@ -291,14 +293,15 @@ def add_clusters(v):
             stats_for_clusters[i]['std'] = math.ceil(
                     statistics.stdev(list(j.values()))
                 )
-        except:
+        except Exception as e:
+            logging.warn(f"{e} cannot compute standard deviation")
             stats_for_clusters[i]['avg_per_txl'] = math.ceil(
                     statistics.mean(list(j.values()))
                 )
             stats_for_clusters[i]['std'] = math.ceil(
                     statistics.mean(list(j.values())) * .5
                 )
-            
+
     return all_clusters, stats_for_clusters
 
 
@@ -345,13 +348,13 @@ if __name__ == '__main__':
     run_id = sys.argv[1]
     metrics_output['run_id'] = run_id
 
-    missing_rows = sys.argv[2].split(",")
-    missing_cols = sys.argv[3].split(",")
-    missing_lanes['row'] = [int(i) - 1 for i in missing_rows if i != '']
-    missing_lanes['col'] = [int(i) - 1 for i in missing_cols if i != '']
+    missing_rows = [int(i) - 1 for i in sys.argv[2].split(",") if i != '']
+    missing_cols = [int(i) - 1 for i in sys.argv[3].split(",") if i != '']
+    missing_lanes['row'] = missing_rows
+    missing_lanes['col'] = missing_cols
 
-    metrics_output['col'] = ''.join(missing_cols)
-    metrics_output['row'] = ''.join(missing_rows)
+    metrics_output['col'] = ','.join(missing_cols)
+    metrics_output['row'] = ','.join(missing_rows)
     fragments_path = sys.argv[4]
     position_path = sys.argv[5]
 
