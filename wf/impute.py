@@ -353,8 +353,8 @@ if __name__ == '__main__':
     missing_lanes['row'] = missing_rows
     missing_lanes['col'] = missing_cols
 
-    metrics_output['col'] = ','.join([str(i) for i in missing_cols])
-    metrics_output['row'] = ','.join([str(i) for i in missing_cols])
+    metrics_output['col'] = ','.join([str(i+1) for i in missing_cols])
+    metrics_output['row'] = ','.join([str(i+1) for i in missing_cols])
     fragments_path = sys.argv[4]
     position_path = sys.argv[5]
 
