@@ -49,9 +49,8 @@ def filter_sc(position_path: str) -> pd.DataFrame:
                 clusters_to_barcode[j] = [i]
             else:
                 clusters_to_barcode[j].append(i)
-    filtered = positions[positions['on_off'] == 1]
 
-    return filtered
+    return positions
 
 
 def get_neighbors(current_value: int, repeat: List[int]) -> List[int]:
