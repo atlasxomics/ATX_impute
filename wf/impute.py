@@ -166,11 +166,11 @@ def imputate_lanes(
         for elem in lane:
             outlier_ids = np.where(singlecell[axis] == elem)
             all_elem_ids[axis] += outlier_ids[0].tolist()
-    for bad_id in all_elem_ids[axis]:
-        element = singlecell.iloc[bad_id]
-        row = element['row']
-        col = element['col']
-        bad_elements.append([row, col])
+        for bad_id in all_elem_ids[axis]:
+            element = singlecell.iloc[bad_id]
+            row = element['row']
+            col = element['col']
+            bad_elements.append([row, col])
 
     for i, j in all_elem_ids.items():
         if len(j) > 0:
