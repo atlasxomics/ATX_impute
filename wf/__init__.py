@@ -1,5 +1,6 @@
 from wf.task import impute_task
 
+from latch.resources.launch_plan import LaunchPlan
 from latch.resources.workflow import workflow
 from latch.types.directory import LatchDir
 from latch.types.file import LatchFile
@@ -103,3 +104,24 @@ def impute_workflow(
         archrproject=archrproject,
         output_directory=output_directory
         )
+
+
+LaunchPlan(
+    impute_workflow,
+    "default",
+    {
+        "run_id": "default",
+        "missing_rows": [11],
+        "missing_columns": [24],
+        "fragments_file": LatchFile(
+            "latch:///chromap_outputs/demo/chromap_output/fragments.tsv.gz"
+        ),
+        "positions_file": LatchFile(
+            "latch:///spatials/demo/spatial/tissue_positions_list.csv"
+        ),
+        "archrproject": LatchDir(
+            "latch:///ArchRProjects/demo/demo_ArchRProject"
+        ),
+        "output_directory": "demo"
+    }
+)
