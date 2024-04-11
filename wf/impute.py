@@ -6,7 +6,6 @@ import pandas as pd
 import statistics
 import sys
 import random
-
 from typing import List, Dict
 
 logging.basicConfig(
@@ -49,9 +48,8 @@ def filter_sc(position_path: str) -> pd.DataFrame:
                 clusters_to_barcode[j] = [i]
             else:
                 clusters_to_barcode[j].append(i)
-    filtered = positions[positions['on_off'] == 1]
 
-    return filtered
+    return positions
 
 
 def get_neighbors(current_value: int, repeat: List[int]) -> List[int]:
@@ -117,6 +115,7 @@ def multiple_degree(
 def neighbors_reductions(
     singlecell: pd.DataFrame,
     outliers: List[int],
+    axis: str,
     degree: int
 ) -> pd.DataFrame:
     """ Return table with barcode|barcode_index|adjust where "adjust"
@@ -136,6 +135,9 @@ def neighbors_reductions(
             missing_tixel_neighbor[barcode] = {}
         neighbors = get_neighbors([row, col], [])
         # if degree > 1: neighbors += multiple_degree(neighbors, degree, i)
+        if len(neighbors) > 0:
+            if current_tixel[axis] in missing_lanes[axis]:
+                missing_lanes[axis].remove(current_tixel[axis])
         for pos, j in neighbors.items():
             try:
                 current_neighbor = (
@@ -167,15 +169,15 @@ def imputate_lanes(
         for elem in lane:
             outlier_ids = np.where(singlecell[axis] == elem)
             all_elem_ids[axis] += outlier_ids[0].tolist()
-    for bad_id in all_elem_ids[axis]:
-        element = singlecell.iloc[bad_id]
-        row = element['row']
-        col = element['col']
-        bad_elements.append([row, col])
+        for bad_id in all_elem_ids[axis]:
+            element = singlecell.iloc[bad_id]
+            row = element['row']
+            col = element['col']
+            bad_elements.append([row, col])
 
     for i, j in all_elem_ids.items():
         if len(j) > 0:
-            neighbors_reductions(singlecell, j, degree)
+            neighbors_reductions(singlecell, j, i, degree)
 
 
 def combine_tables(
@@ -261,7 +263,7 @@ def update_fragments(
 
     final_frags = pd.concat([final_frags, pre])
     final_frags = final_frags.drop('clusters', axis=1)
-
+    missing_tixel_neighbor = {}
     return final_frags
 
 
@@ -284,7 +286,7 @@ def add_clusters(v):
         except Exception as e:
             logging.warn(f"{e}")
             pass
-
+    
     for i, j in tixels_in_cluster.items():
         try:
             stats_for_clusters[i]['avg_per_txl'] = math.ceil(
@@ -306,6 +308,7 @@ def add_clusters(v):
 
 
 def clean_fragments(
+    singlecell: pd.DataFrame,
     fragments_path: str
   ) -> pd.DataFrame:
     """Reduce high tixels by randomly downsampling fragments.tsv
@@ -328,7 +331,8 @@ def clean_fragments(
 
     # Add missing lanes if needed
     logging.info("Splitting fragments.tsv")
-    if (len(missing_lanes['row'] + missing_lanes['col']) > 0):
+    while len(missing_lanes['row'] + missing_lanes['col']) > 0:
+        combine_tables(singlecell, degree)
         missing_barcodes = list(missing_tixel_neighbor.keys())
         remove_missing_barcodes = fragments[
             fragments['barcode'].isin(missing_barcodes) == False
@@ -355,14 +359,14 @@ if __name__ == '__main__':
 
     metrics_output['col'] = ','.join([str(i) for i in missing_cols])
     metrics_output['row'] = ','.join([str(i) for i in missing_rows])
+
     fragments_path = sys.argv[4]
     position_path = sys.argv[5]
 
     degree = 1
 
     singlecell = filter_sc(position_path)
-    combine_tables(singlecell, degree)
-    cleaned = clean_fragments(fragments_path)
+    cleaned = clean_fragments(singlecell, fragments_path)
 
     cleaned.to_csv(
         f'{run_id}_fragments.tsv',
