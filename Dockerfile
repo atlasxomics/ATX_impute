@@ -36,17 +36,20 @@ RUN apt-get update -y && \
         zlib1g-dev \
         tabix 
 
-# Install devtools, cairo like this; see https://stackoverflow.com/questions/20923209
+# Install devtools (https://stackoverflow.com/questions/20923209), also cairo
 RUN apt-get install -y r-cran-devtools libcairo2-dev
 
-# Install R packages
-RUN R -e "install.packages(c('Cairo', 'BiocManager', 'Matrix', 'Seurat'))"
-RUN R -e "devtools::install_github('immunogenomics/harmony')"
-RUN R -e "devtools::install_github('GreenleafLab/ArchR', ref='master', repos = BiocManager::repositories())"
-RUN R -e "library('ArchR'); ArchR::installExtraPackages()"
+# Install R packages with renv
+RUN R -e "install.packages('https://cran.r-project.org/src/contrib/renv_1.0.5.tar.gz', repos = NULL, type = 'source')"
+COPY renv.lock /root/renv.lock
+COPY .Rprofile /root/.Rprofile
+RUN mkdir /root/renv
+COPY renv/activate.R /root/renv/activate.R
+COPY renv/settings.json /root/renv/settings.json
+RUN R -e "renv::restore()"
 
 # Install Python packages
-RUN python3 -m pip install pandas
+RUN python3 -m pip install pandas==2.2.1
 
 # STOP HERE:
 # The following lines are needed to ensure your build environement works
