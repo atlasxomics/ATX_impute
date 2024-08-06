@@ -6,6 +6,7 @@ import pandas as pd
 import statistics
 import sys
 import random
+import multiprocessing
 from typing import List, Dict
 
 logging.basicConfig(
@@ -21,6 +22,7 @@ number_of_channels = None
 barcode_to_clusters = {}
 clusters_to_barcode = {}
 
+cpu_count = 2
 
 def filter_sc(position_path: str) -> pd.DataFrame:
     """ Reformat data, remove headers, apply custom column names for
@@ -190,51 +192,37 @@ def combine_tables(
         imputation_singlecell = singlecell.copy()
         imputate_lanes(imputation_singlecell, degree)
 
+def max_cluster(list_clust: List[str]):
+    counter = []
+    max_val = 0
+    final_clust = ''
+    for i in list_clust:
+        clust_appear = list_clust.count(i)
+        tupe = (i, clust_appear)
+        counter.append(tupe)
 
-def update_fragments(
-    fragments: pd.DataFrame,
-    stats_cluster: Dict[str, Dict[str, int]]
-) -> pd.DataFrame:
-    """Remove missing tixels from fragments and add them back
-    """
-    global missing_tixel_neighbor
-    global clusters_to_barcode
-    global barcode_to_clusters
-
-    def max_cluster(list_clust: List[str]):
-        counter = []
-        max_val = 0
-        final_clust = ''
-        for i in list_clust:
-            clust_appear = list_clust.count(i)
-            tupe = (i, clust_appear)
-            counter.append(tupe)
-
-        counter.sort(key=lambda x: x[1], reverse=True)
-        max_val = counter[0][1]
-        count = 0
-        for i in range(1, len(counter)):
-            if i == max_val:
-                count += 1
-            else:
-                break
-
-        if count > 0:
-            rand_num = random.randint(0, count)
-            final_clust = counter[rand_num][0]
-        else:
-            final_clust = counter[0][0]
-
-        return final_clust
-
-    final_frags = fragments.copy()
-    dict_data_clusters = stats_cluster
-
+    counter.sort(key=lambda x: x[1], reverse=True)
+    max_val = counter[0][1]
     count = 0
-    pre = pd.DataFrame()
-    for m_tixel, j in missing_tixel_neighbor.items():
-        count += 1
-        print(count, pre.shape[0])
+    for i in range(1, len(counter)):
+        if i == max_val:
+            count += 1
+        else:
+            break
+
+    if count > 0:
+        rand_num = random.randint(0, count)
+        final_clust = counter[rand_num][0]
+    else:
+        final_clust = counter[0][0]
+
+    return final_clust
+
+def process_update(list_tup, final_frags, dict_data_clusters, queue, lock):
+    global barcode_to_clusters
+    
+    alls = []
+    for m_tixel, j in list_tup:
         define_cluster = []
 
         if len(j.keys()) > 0:
@@ -259,52 +247,157 @@ def update_fragments(
             if given_frags < 0:
                 given_frags = 0
             downsampled = current_cluster_frags.sample(n=given_frags)
-            pre = pd.concat([pre, downsampled])
+            alls.append(downsampled)
+    with lock:
+        queue.put(alls)
+          
+def split_dict(input_dict: Dict, num: int):
+    items = list(input_dict.items())
+    total_items = len(items)
+    part_size = total_items // num
+    remainder = total_items % num
+
+    split_dicts = []
+    start = 0
+
+    for i in range(num):
+        end = start + part_size + (1 if i < remainder else 0)
+        split_dicts.append(dict(items[start:end]))
+        start = end
+
+    return split_dicts
+
+def update_fragments(
+    fragments: pd.DataFrame,
+    stats_cluster: Dict[str, Dict[str, int]]
+) -> pd.DataFrame:
+    """Remove missing tixels from fragments and add them back
+    """
+    global missing_tixel_neighbor
+    global cpu_count
+
+
+    final_frags = fragments.copy()
+    dict_data_clusters = stats_cluster
+
+    pre = pd.DataFrame()
+    split = split_dict(missing_tixel_neighbor, cpu_count)
+    mult_process = []
+    for frag_dict in split:
+        new = [(i,j) for i,j in frag_dict.items()]
+        mult_process.append(new)
+    
+    queue = multiprocessing.Queue()
+    counter = multiprocessing.Value('i', -1 * cpu_count)  # Shared counter initialized to 0
+    lock = multiprocessing.Lock()
+    
+    processes = []
+    for missing_dict in mult_process:
+        p = multiprocessing.Process(target=process_update, args=(missing_dict, final_frags, dict_data_clusters, queue, lock))
+        processes.append(p)
+        p.start()
+        
+    while counter.value != 0:
+        result = queue.get()
+        pre = pd.concat([pre, *result])
+        with lock:
+            counter.value += 1
+        
+    for p in processes:
+        p.join()
+        
 
     final_frags = pd.concat([final_frags, pre])
     final_frags = final_frags.drop('clusters', axis=1)
     missing_tixel_neighbor = {}
     return final_frags
 
-
+def process_first_loop(chunk_barcode, queue, lock):
+    global barcode_to_clusters
+    
+    clusters = []
+    tixels = {}
+    stats = {}
+    for current_barcode in chunk_barcode:
+        current_cluster = barcode_to_clusters[current_barcode]
+        clusters.append(current_cluster)
+        try:
+            if current_cluster not in tixels.keys():
+                tixels[current_cluster] = {}
+                stats[current_cluster] = {}
+    
+            if current_barcode not in tixels[current_cluster].keys():
+                tixels[current_cluster][current_barcode] = 0
+            tixels[current_cluster][current_barcode] += 1
+        except Exception as e:
+            #logging.warn(f"{e}")
+            pass
+    with lock:
+        queue.put((clusters, tixels, stats))
+    
+def process_second_loop(clust, counts):
+    avg = 0
+    std = 0
+    try:
+        avg = math.ceil(
+                statistics.mean(counts)
+            )
+        std = math.ceil(
+                statistics.stdev(counts)
+            )
+    except Exception as e:
+        logging.warn(f"{e} cannot compute standard deviation")
+        avg = math.ceil(
+                statistics.mean(counts)
+            )
+        std = math.ceil(
+                statistics.mean(counts) * .5
+            )
+    return((clust, avg, std))
+      
 def add_clusters(v):
+    global cpu_count
+    
     all_clusters = []
     tixels_in_cluster = {}
     stats_for_clusters = {}
-    all_barcode = v['barcode'].values
-    for current_barcode in all_barcode:
-        current_cluster = barcode_to_clusters[current_barcode]
-        all_clusters.append(current_cluster)
-        try:
-            if current_cluster not in tixels_in_cluster.keys():
-                tixels_in_cluster[current_cluster] = {}
-                stats_for_clusters[current_cluster] = {}
-
-            if current_barcode not in tixels_in_cluster[current_cluster].keys():
-                tixels_in_cluster[current_cluster][current_barcode] = 0
-            tixels_in_cluster[current_cluster][current_barcode] += 1
-        except Exception as e:
-            logging.warn(f"{e}")
-            pass
+    all_barcode = list(v['barcode'].values)
     
-    for i, j in tixels_in_cluster.items():
-        try:
-            stats_for_clusters[i]['avg_per_txl'] = math.ceil(
-                    statistics.mean(list(j.values()))
-                )
-            stats_for_clusters[i]['std'] = math.ceil(
-                    statistics.stdev(list(j.values()))
-                )
-        except Exception as e:
-            logging.warn(f"{e} cannot compute standard deviation")
-            stats_for_clusters[i]['avg_per_txl'] = math.ceil(
-                    statistics.mean(list(j.values()))
-                )
-            stats_for_clusters[i]['std'] = math.ceil(
-                    statistics.mean(list(j.values())) * .5
-                )
+    chunksize = math.ceil(len(all_barcode)/cpu_count)
+    split = [all_barcode[i:i+chunksize] for i in range(0, len(all_barcode), chunksize)]
+    
+    counter = multiprocessing.Value('i', -cpu_count)  # Shared counter initialized to 0
+    lock = multiprocessing.Lock()
+    queue = multiprocessing.Queue()
+    
+    processes = []
+    for barcodes in split:
+        p = multiprocessing.Process(target=process_first_loop, args=(barcodes, queue, lock))
+        processes.append(p)
+        p.start()
+        
+    while counter.value != 0 :
+        result = queue.get()
+        all_clusters += result[0]
+        tixels_in_cluster.update(result[1])
+        stats_for_clusters.update(result[2])
+        with lock:
+            counter.value += 1
 
-    return all_clusters, stats_for_clusters
+    for p in processes:
+        p.join()
+        
+    
+    with multiprocessing.Pool() as pool:
+        # prepare arguments
+        items = [(i, list(j.values())) for i,j in tixels_in_cluster.items()]
+        for result in pool.starmap(process_second_loop, items):
+            clust = result[0]
+            stats_for_clusters[clust]['avg_per_txl'] = result[1]
+            stats_for_clusters[clust]['std'] = result[2]
+
+    
+    return list(all_clusters), stats_for_clusters
 
 
 def clean_fragments(
