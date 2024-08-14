@@ -319,8 +319,12 @@ def process_first_loop(chunk_barcode, queue, lock):
     tixels = {}
     stats = {}
     for current_barcode in chunk_barcode:
-        current_cluster = barcode_to_clusters[current_barcode]
-        clusters.append(current_cluster)
+        try:
+            current_cluster = barcode_to_clusters[current_barcode]
+            clusters.append(current_cluster)
+        except Exception as e:
+            current_cluster = 'C0'
+            clusters.append('C0')
         try:
             if current_cluster not in tixels.keys():
                 tixels[current_cluster] = {}
@@ -330,7 +334,7 @@ def process_first_loop(chunk_barcode, queue, lock):
                 tixels[current_cluster][current_barcode] = 0
             tixels[current_cluster][current_barcode] += 1
         except Exception as e:
-            #logging.warn(f"{e}")
+            print(e)
             pass
     with lock:
         queue.put((clusters, tixels, stats))
