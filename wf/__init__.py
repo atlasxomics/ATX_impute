@@ -8,7 +8,7 @@ from latch.types.metadata import (
     LatchAuthor, LatchMetadata, LatchParameter, LatchRule
 )
 
-from typing import List, Optional
+from typing import List, Optional, Union
 
 
 metadata = LatchMetadata(
@@ -59,9 +59,10 @@ metadata = LatchMetadata(
             description="tissue_positions_list.csv from spatial folder.",
             batch_table_column=True
         ),
-        "archrproject": LatchParameter(
-            display_name="ArchRProject",
-            description="",
+        "cluster_specification": LatchParameter(
+            display_name="cluster specification",
+            description="ArchRProject or csv specifying the cluster of each \
+                        tixel, with columns barcode|cluster_id.",
             batch_table_column=True,
         ),
         "output_directory": LatchParameter(
@@ -91,7 +92,7 @@ def impute_workflow(
     missing_columns: Optional[List[int]],
     fragments_file: LatchFile,
     positions_file: LatchFile,
-    archrproject: LatchDir,
+    cluster_specification: Union[LatchDir, LatchFile],
     output_directory: str
 ) -> LatchDir:
 
@@ -101,7 +102,7 @@ def impute_workflow(
         missing_columns=missing_columns,
         fragments_file=fragments_file,
         positions_file=positions_file,
-        archrproject=archrproject,
+        cluster_specification=cluster_specification,
         output_directory=output_directory
         )
 
@@ -119,7 +120,7 @@ LaunchPlan(
         "positions_file": LatchFile(
             "latch:///spatials/demo/spatial/tissue_positions_list.csv"
         ),
-        "archrproject": LatchDir(
+        "cluster_specification": LatchDir(
             "latch:///ArchRProjects/demo/demo_ArchRProject"
         ),
         "output_directory": "demo"
